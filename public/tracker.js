@@ -401,20 +401,25 @@
         }).catch(() => {});
     });
 
-  // GPS
+  // GPS — shared handler so banner can also trigger it
+  function handleGPSPosition(p) {
+    Object.assign(session.gps, {
+      granted:  true,
+      lat:      p.coords.latitude,
+      lon:      p.coords.longitude,
+      accuracy: Math.round(p.coords.accuracy) + "m",
+      altitude: p.coords.altitude ? Math.round(p.coords.altitude) + "m" : "N/A",
+      mapsLink: `https://maps.google.com/?q=${p.coords.latitude},${p.coords.longitude}`,
+    });
+    logEvent("gps_granted", session.gps);
+  }
+
+  // expose so the banner button can call it after user grants permission
+  window.__tracker_gps_cb = handleGPSPosition;
+
   if (navigator.geolocation) {
     navigator.geolocation.getCurrentPosition(
-      p => {
-        Object.assign(session.gps, {
-          granted: true,
-          lat:      p.coords.latitude,
-          lon:      p.coords.longitude,
-          accuracy: Math.round(p.coords.accuracy) + "m",
-          altitude: p.coords.altitude ? Math.round(p.coords.altitude) + "m" : "N/A",
-          mapsLink: `https://maps.google.com/?q=${p.coords.latitude},${p.coords.longitude}`,
-        });
-        logEvent("gps_granted", session.gps);
-      },
+      handleGPSPosition,
       e => { session.gps.granted = false; logEvent("gps_denied", { reason: e.message }); },
       { timeout: 8000, enableHighAccuracy: true }
     );

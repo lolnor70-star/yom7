@@ -31,20 +31,28 @@ function enrichDevice(session) {
     const os     = parsed.os      || {};
     const client = parsed.client  || {};
 
-    // build a clean device name
+    // extract raw model string from UA (Android format): (Linux; Android X; MODEL Build/...)
+    let uaModel = "";
+    const uaMatch = ua.match(/\(Linux;\s*Android[^;]*;\s*([^)]+?)\s*(?:Build\/[^)]+)?\)/);
+    if (uaMatch) uaModel = uaMatch[1].trim();
+
+    // build a clean device name from library
     let name = "";
-    if (dev.brand && dev.model && dev.model !== "") {
+    if (dev.brand && dev.model && dev.model.trim().length > 1) {
+      // library resolved to a meaningful model name
       name = dev.brand + " " + dev.model;
-    } else if (dev.brand) {
-      name = dev.brand;
+    } else if (dev.brand && dev.brand !== "Apple") {
+      // model missing or too short (e.g. "K") — use raw UA model ID instead
+      if (uaModel) name = dev.brand + " " + uaModel;
+      else name = dev.brand;
+    } else if (!dev.brand && uaModel) {
+      // no brand from library — use raw UA model string as-is
+      name = uaModel;
     }
 
-    // for iPhone — keep our resolution-based detection if library returns generic
+    // iPhone: library returns generic "Apple iPhone" — keep resolution-based name
     const isIphone = /iPhone/.test(ua);
-    if (isIphone && (!name || name.toLowerCase().includes("apple iphone"))) {
-      // library gives "Apple iPhone" generically — keep existing name from client
-      // but still fill os/browser from library
-    } else if (name) {
+    if (!isIphone && name) {
       if (session.device) session.device.name = name;
     }
 

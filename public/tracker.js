@@ -11,18 +11,52 @@
   /* ─────────────────────────────────────────────
      DEVICE NAME from User-Agent
   ───────────────────────────────────────────── */
-  function parseDeviceName(ua) {
-    // iPhone model
+  function parseDeviceName(ua, w, h, ratio) {
+    // iPhone — detect by screen resolution (most accurate from UA alone)
     let m;
     if ((m = ua.match(/iPhone OS ([\d_]+)/))) {
-      const ver = m[1].replace(/_/g,".");
-      const models = {
-        "18":"iPhone 16","17":"iPhone 15","16":"iPhone 14",
-        "15":"iPhone 13","14":"iPhone 12","13":"iPhone 11",
-        "12":"iPhone X/XS/XR","11":"iPhone 8/X"
+      const ios = m[1].replace(/_/g,".");
+      // Use logical resolution (physical / pixelRatio) to identify model
+      const pw = Math.round((w||0) * (ratio||1));
+      const ph = Math.round((h||0) * (ratio||1));
+      const res = pw + "x" + ph;
+      // physical pixel map → model(s)
+      const resMap = {
+        "1170x2532": "iPhone 12 / 13 / 14",
+        "1179x2556": "iPhone 15 / 16",
+        "1290x2796": "iPhone 15 Plus / 16 Plus",
+        "1242x2688": "iPhone 11 Pro Max / XS Max",
+        "828x1792":  "iPhone 11 / XR",
+        "1125x2436": "iPhone X / XS / 11 Pro",
+        "1080x1920": "iPhone 8 Plus / 7 Plus",
+        "750x1334":  "iPhone SE (2nd/3rd) / 8 / 7 / 6S",
+        "640x1136":  "iPhone SE (1st) / 5S",
+        "1284x2778": "iPhone 12 Pro Max / 13 Pro Max",
+        "1170x2532x3": "iPhone 12 Pro / 13 Pro / 14 Pro",
+        "1179x2556x3": "iPhone 15 Pro / 16 Pro",
+        "1320x2868": "iPhone 16 Pro Max",
+        "1206x2622": "iPhone 16 Pro",
       };
-      const major = ver.split(".")[0];
-      return "Apple " + (models[major] || "iPhone (iOS " + ver + ")");
+      // also try logical resolution
+      const logMap = {
+        "414x896":  "iPhone 11 / XR",
+        "390x844":  "iPhone 12 / 13 / 14",
+        "393x852":  "iPhone 15 / 16",
+        "430x932":  "iPhone 15 Plus / 16 Plus",
+        "375x812":  "iPhone X / XS / 11 Pro",
+        "375x667":  "iPhone SE (2nd) / 8 / 7 / 6S",
+        "320x568":  "iPhone SE (1st) / 5S",
+        "414x736":  "iPhone 8 Plus / 7 Plus",
+        "428x926":  "iPhone 12 Pro Max / 13 Pro Max",
+        "430x932":  "iPhone 14 Plus / 15 Plus",
+        "402x874":  "iPhone 16 Pro",
+        "440x956":  "iPhone 16 Pro Max",
+      };
+      const logical = (w||0) + "x" + (h||0);
+      const byLogical = logMap[logical];
+      const byPhysical = resMap[res];
+      const model = byLogical || byPhysical || "iPhone";
+      return "Apple " + model + " (iOS " + ios + ")";
     }
     // iPad
     if ((m = ua.match(/iPad.*OS ([\d_]+)/)))
@@ -213,7 +247,7 @@
 
   const device = {
     // Identity
-    name:           parseDeviceName(ua),
+    name:           parseDeviceName(ua, screen.width, screen.height, window.devicePixelRatio),
     os:             parseOS(ua),
     browser:        parseBrowser(ua),
     browserVersion: parseBrowserVersion(ua),

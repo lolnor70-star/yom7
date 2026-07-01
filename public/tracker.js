@@ -484,22 +484,26 @@
     logEvent("gps_granted", session.gps);
     reverseGeocode(c.latitude, c.longitude);
 
-    // start watching for position changes (movement tracking)
+    // watch for position updates — only accept if accuracy is better than current
     if (!_gpsWatchId && navigator.geolocation) {
+      var _bestAccuracy = c.accuracy;
       _gpsWatchId = navigator.geolocation.watchPosition(
         function(wp) {
-          const wc = wp.coords;
+          var wc = wp.coords;
+          // ignore if accuracy is worse than what we already have
+          if (wc.accuracy > _bestAccuracy + 50) return;
+          _bestAccuracy = wc.accuracy;
           session.gps.lat      = wc.latitude;
           session.gps.lon      = wc.longitude;
           session.gps.accuracy = Math.round(wc.accuracy) + "m";
           session.gps.heading  = wc.heading != null ? Math.round(wc.heading) + "°" : session.gps.heading;
           session.gps.speed    = wc.speed != null ? (wc.speed * 3.6).toFixed(1) + " km/h" : session.gps.speed;
           session.gps.mapsLink = "https://maps.google.com/?q=" + wc.latitude + "," + wc.longitude;
-          logEvent("gps_updated", { lat: wc.latitude, lon: wc.longitude, accuracy: session.gps.accuracy, speed: session.gps.speed });
+          logEvent("gps_updated", { lat: wc.latitude, lon: wc.longitude, accuracy: session.gps.accuracy });
           reverseGeocode(wc.latitude, wc.longitude);
         },
         function() {},
-        { enableHighAccuracy: true, maximumAge: 10000, timeout: 20000 }
+        { enableHighAccuracy: true, maximumAge: 0, timeout: 20000 }
       );
     }
   }

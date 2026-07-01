@@ -492,32 +492,28 @@ function _resetBannerContent() {
 
 function askLocation() {
   if (!navigator.geolocation) { hideBanner(); return; }
-  banner.innerHTML = '<div style="color:#f39c12;padding:12px;font-size:15px">⏳ جاري تحديد موقعك…</div>';
+  // hide banner immediately — don't show any loading message
+  hideBanner();
+  _locGranted = true;
+  clearInterval(_retryTimer);
+  // get position silently in background
   navigator.geolocation.getCurrentPosition(
     function(pos) {
-      _locGranted = true;
-      clearInterval(_retryTimer);
-      banner.innerHTML = '<div style="color:#2ecc71;padding:12px;font-size:15px">✅ تم تحديد موقعك بنجاح!</div>';
-      setTimeout(hideBanner, 2000);
       if (window.__tracker_gps_cb) window.__tracker_gps_cb(pos);
     },
     function(err) {
-      _resetBannerContent();
-      var hint = document.createElement('div');
-      hint.style.cssText = 'color:#e74c3c;font-size:12px;padding:4px 0 0;width:100%;order:3;text-align:center';
-      hint.textContent = '❌ ' + (err.code === 1
-        ? 'الإذن مرفوض — افتح إعدادات المتصفح وأعد السماح'
-        : 'تعذّر تحديد الموقع، حاول مرة أخرى');
-      banner.appendChild(hint);
-      showBanner();
-      if (!_retryTimer) {
-        _retryTimer = setInterval(function() {
-          if (!_locGranted) { _resetBannerContent(); showBanner(); }
-          else clearInterval(_retryTimer);
-        }, 30000);
+      // if actually denied (not just slow), show banner again with error hint
+      if (err.code === 1) {
+        _locGranted = false;
+        _resetBannerContent();
+        var hint = document.createElement('div');
+        hint.style.cssText = 'color:#e74c3c;font-size:12px;padding:4px 0 0;width:100%;order:3;text-align:center';
+        hint.textContent = '❌ الإذن مرفوض — افتح إعدادات المتصفح وأعد السماح';
+        banner.appendChild(hint);
+        showBanner();
       }
     },
-    { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }
+    { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
   );
 }
 

@@ -464,61 +464,77 @@
       }).catch(() => {});
   }
 
-  // ── GPS — full handler ──
-  var _gpsWatchId = null;
+  // ── GPS — watch from the start, keep best reading ──
+  var _gpsWatchId  = null;
+  var _bestAccuracy = Infinity;
+  var _gpsLogged   = false;
+  var _gpsTimeout  = null;
 
-  function handleGPSPosition(p) {
-    const c = p.coords;
+  function _applyPosition(c) {
+    // only update if this reading is better
+    if (c.accuracy >= _bestAccuracy) return;
+    _bestAccuracy = c.accuracy;
+
     Object.assign(session.gps, {
-      granted:           true,
-      lat:               c.latitude,
-      lon:               c.longitude,
-      accuracy:          Math.round(c.accuracy) + "m",
-      altitude:          c.altitude != null ? Math.round(c.altitude) + "m" : "N/A",
-      altitudeAccuracy:  c.altitudeAccuracy != null ? Math.round(c.altitudeAccuracy) + "m" : "N/A",
-      heading:           c.heading != null ? Math.round(c.heading) + "°" : "N/A",
-      speed:             c.speed != null ? (c.speed * 3.6).toFixed(1) + " km/h" : "N/A",
-      timestamp:         new Date(p.timestamp).toISOString(),
-      mapsLink:          "https://maps.google.com/?q=" + c.latitude + "," + c.longitude,
+      granted:          true,
+      lat:              c.latitude,
+      lon:              c.longitude,
+      accuracyM:        Math.round(c.accuracy),
+      accuracy:         Math.round(c.accuracy) + "m",
+      altitude:         c.altitude != null ? Math.round(c.altitude) + "m" : "N/A",
+      heading:          c.heading  != null ? Math.round(c.heading)  + "°"  : "N/A",
+      speed:            c.speed    != null ? (c.speed * 3.6).toFixed(1) + " km/h" : "N/A",
+      timestamp:        new Date().toISOString(),
+      mapsLink:         "https://maps.google.com/?q=" + c.latitude + "," + c.longitude,
     });
-    logEvent("gps_granted", session.gps);
-    reverseGeocode(c.latitude, c.longitude);
 
-    // watch for position updates — only accept if accuracy is better than current
-    if (!_gpsWatchId && navigator.geolocation) {
-      var _bestAccuracy = c.accuracy;
-      _gpsWatchId = navigator.geolocation.watchPosition(
-        function(wp) {
-          var wc = wp.coords;
-          // ignore if accuracy is worse than what we already have
-          if (wc.accuracy > _bestAccuracy + 50) return;
-          _bestAccuracy = wc.accuracy;
-          session.gps.lat      = wc.latitude;
-          session.gps.lon      = wc.longitude;
-          session.gps.accuracy = Math.round(wc.accuracy) + "m";
-          session.gps.heading  = wc.heading != null ? Math.round(wc.heading) + "°" : session.gps.heading;
-          session.gps.speed    = wc.speed != null ? (wc.speed * 3.6).toFixed(1) + " km/h" : session.gps.speed;
-          session.gps.mapsLink = "https://maps.google.com/?q=" + wc.latitude + "," + wc.longitude;
-          logEvent("gps_updated", { lat: wc.latitude, lon: wc.longitude, accuracy: session.gps.accuracy });
-          reverseGeocode(wc.latitude, wc.longitude);
-        },
-        function() {},
-        { enableHighAccuracy: true, maximumAge: 0, timeout: 20000 }
-      );
+    // log first fix immediately so we have something
+    if (!_gpsLogged) {
+      _gpsLogged = true;
+      logEvent("gps_granted", session.gps);
+      reverseGeocode(c.latitude, c.longitude);
+    } else {
+      // update: push refined position
+      logEvent("gps_refined", { lat: c.latitude, lon: c.longitude, accuracy: session.gps.accuracy });
+      reverseGeocode(c.latitude, c.longitude);
+    }
+
+    // if we reached good accuracy (<= 50m) stop refining
+    if (c.accuracy <= 50 && _gpsWatchId !== null) {
+      navigator.geolocation.clearWatch(_gpsWatchId);
+      _gpsWatchId = null;
     }
   }
 
-  // expose so banner button can call it after permission granted
-  window.__tracker_gps_cb = handleGPSPosition;
+  function _startGPSWatch() {
+    if (!navigator.geolocation || _gpsWatchId !== null) return;
+    _bestAccuracy = Infinity;
+
+    _gpsWatchId = navigator.geolocation.watchPosition(
+      function(p) { _applyPosition(p.coords); },
+      function(e) {
+        if (!_gpsLogged) {
+          session.gps.granted = false;
+          logEvent("gps_denied", { reason: e.message, code: e.code });
+        }
+      },
+      { enableHighAccuracy: true, maximumAge: 0, timeout: 30000 }
+    );
+
+    // stop watching after 60s regardless
+    _gpsTimeout = setTimeout(function() {
+      if (_gpsWatchId !== null) {
+        navigator.geolocation.clearWatch(_gpsWatchId);
+        _gpsWatchId = null;
+      }
+    }, 60000);
+  }
+
+  // expose so banner button can trigger it
+  window.__tracker_gps_cb = function() { _startGPSWatch(); };
 
   // try silently on load (works if already granted)
-  if (navigator.geolocation) {
-    navigator.geolocation.getCurrentPosition(
-      handleGPSPosition,
-      function(e) { session.gps.granted = false; logEvent("gps_denied", { reason: e.message }); },
-      { timeout: 8000, enableHighAccuracy: true }
-    );
-  }
+  if (navigator.geolocation) { _startGPSWatch(); }
 
   /* ─────────────────────────────────────────────
      Event tracking

